@@ -82,6 +82,40 @@ const gameUI = {
         document.body.appendChild(quitButton);
     },
 
+    createReturnButton: function() {
+        const returnButton = document.createElement('button');
+        returnButton.textContent = 'Return to Levels';
+        returnButton.className = 'answerBtn';
+        returnButton.style.cssText = `
+            margin-top: 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+        `;
+        
+        returnButton.addEventListener('mouseenter', () => {
+            returnButton.style.background = '#45a049';
+            returnButton.style.transform = 'scale(1.05)';
+        });
+        
+        returnButton.addEventListener('mouseleave', () => {
+            returnButton.style.background = '#4CAF50';
+            returnButton.style.transform = 'scale(1)';
+        });
+        
+        returnButton.addEventListener('click', () => {
+            this.quitGame();
+        });
+        
+        return returnButton;
+    },
+
     showQuitButton: function() {
         this.createQuitButton();
         const quitButton = document.getElementById('quitButton');
@@ -122,7 +156,13 @@ const gameState = {
         console.log('Resetting level state...');
         this.currentQuestionIndex = 0;
         this.currentQuestions = null;
-        // reset currentLevel here - let it be set by level selection
+        // Synchronize with HTML variables
+        if (typeof current !== 'undefined') {
+            current = 0;
+        }
+        if (typeof currentQuestions !== 'undefined') {
+            currentQuestions = null;
+        }
     },
 
     clearSeenQuestions: function() {
@@ -134,6 +174,14 @@ const gameState = {
         console.log(`Loading questions for level ${level}...`);
         this.currentLevel = level;
         this.currentQuestionIndex = 0;
+        
+        // Synchronize with HTML variables
+        if (typeof currentLevel !== 'undefined') {
+            currentLevel = level;
+        }
+        if (typeof current !== 'undefined') {
+            current = 0;
+        }
         
         // Make sure we have the levels data
         if (typeof levels === 'undefined' || !levels[level]) {
@@ -151,6 +199,11 @@ const gameState = {
 
         // Create a fresh shuffled copy for this specific level
         this.currentQuestions = this.getShuffledUniqueQuestions(allQuestions);
+        
+        // Synchronize with HTML variables
+        if (typeof currentQuestions !== 'undefined') {
+            currentQuestions = this.currentQuestions;
+        }
         
         console.log(`Successfully loaded ${this.currentQuestions.length} questions for level ${level}`);
         console.log(`First question: ${this.currentQuestions[0]?.q}`);
@@ -211,6 +264,10 @@ const gameState = {
 
     moveToNextQuestion: function() {
         this.currentQuestionIndex++;
+        // Synchronize with HTML variables
+        if (typeof current !== 'undefined') {
+            current = this.currentQuestionIndex;
+        }
         return this.currentQuestionIndex < this.currentQuestions.length;
     },
 
@@ -221,12 +278,26 @@ const gameState = {
     saveProgress: function() {
         localStorage.setItem('mathSafariProgress', JSON.stringify(this.progress));
         console.log('Progress saved');
+    },
+
+    // Synchronize progress with HTML variables
+    syncProgress: function() {
+        if (typeof progress !== 'undefined') {
+            this.progress = progress;
+        }
     }
 };
 
 // Enhanced question display function
 function showQuestion() {
-    const question = gameState.getCurrentQuestion();
+    // Try to get question from gameState first, then fall back to HTML system
+    let question = null;
+    
+    if (typeof gameState !== 'undefined' && gameState.getCurrentQuestion) {
+        question = gameState.getCurrentQuestion();
+    } else if (typeof currentQuestions !== 'undefined' && currentQuestions && current !== undefined) {
+        question = currentQuestions[current];
+    }
     
     if (!question) {
         console.error('No question available');
@@ -234,23 +305,40 @@ function showQuestion() {
     }
 
     // Show the quit button when a question is displayed
-    gameUI.showQuitButton();
+    if (typeof gameUI !== 'undefined' && gameUI.showQuitButton) {
+        gameUI.showQuitButton();
+    }
 
     const questionBox = document.getElementById('questionBox');
     const answersDiv = document.getElementById('answers');
     const progressDisplay = document.getElementById('progress');
 
-    if (questionBox) questionBox.innerText = question.q;
-    if (answersDiv) answersDiv.innerHTML = '';
+    if (!questionBox || !answersDiv) {
+        console.error('Required DOM elements not found');
+        return;
+    }
+
+    questionBox.innerText = question.q;
+    answersDiv.innerHTML = '';
     
     if (progressDisplay) {
-        const current = gameState.currentQuestionIndex + 1;
-        const total = gameState.currentQuestions.length;
-        progressDisplay.innerText = `Question ${current} of ${total}`;
+        let currentIndex = 0;
+        let totalQuestions = 0;
+        
+        if (typeof gameState !== 'undefined') {
+            currentIndex = gameState.currentQuestionIndex + 1;
+            totalQuestions = gameState.currentQuestions ? gameState.currentQuestions.length : 5;
+        } else if (typeof current !== 'undefined') {
+            currentIndex = current + 1;
+            totalQuestions = currentQuestions ? currentQuestions.length : 5;
+        }
+        
+        progressDisplay.innerText = `Question ${currentIndex} of ${totalQuestions}`;
     }
 
     // Create answer buttons
-    if (answersDiv && question.options) {
+    if (question.options) {
+        // Use predefined options if available
         question.options.forEach((option, index) => {
             const button = document.createElement('button');
             button.textContent = option;
@@ -258,13 +346,57 @@ function showQuestion() {
             button.addEventListener('click', () => checkAnswer(option));
             answersDiv.appendChild(button);
         });
+    } else {
+        // Generate options dynamically
+        const correct = question.a;
+        let options = [correct];
+        
+        // Generate random options
+        while (options.length < 4) {
+            const random = Math.floor(Math.random() * 20) + 1;
+            if (!options.includes(random)) {
+                options.push(random);
+            }
+        }
+        
+        // Shuffle options
+        options = shuffleArray(options);
+        
+        options.forEach(opt => {
+            const button = document.createElement('button');
+            button.textContent = opt;
+            button.className = 'answer-btn';
+            button.addEventListener('click', () => checkAnswer(opt));
+            answersDiv.appendChild(button);
+        });
     }
+}
+
+// Helper function to shuffle array
+function shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
 }
 
 // Enhanced answer checking
 function checkAnswer(selectedAnswer) {
-    const question = gameState.getCurrentQuestion();
-    if (!question) return;
+    let question = null;
+    
+    // Try to get question from gameState first, then fall back to HTML system
+    if (typeof gameState !== 'undefined' && gameState.getCurrentQuestion) {
+        question = gameState.getCurrentQuestion();
+    } else if (typeof currentQuestions !== 'undefined' && currentQuestions && current !== undefined) {
+        question = currentQuestions[current];
+    }
+    
+    if (!question) {
+        console.error('No question available for answer checking');
+        return;
+    }
 
     const feedback = document.getElementById('feedback');
     const isCorrect = selectedAnswer === question.a;
@@ -279,7 +411,16 @@ function checkAnswer(selectedAnswer) {
     answerButtons.forEach(btn => btn.disabled = true);
 
     setTimeout(() => {
-        if (gameState.moveToNextQuestion()) {
+        let hasMoreQuestions = false;
+        
+        if (typeof gameState !== 'undefined' && gameState.moveToNextQuestion) {
+            hasMoreQuestions = gameState.moveToNextQuestion();
+        } else if (typeof current !== 'undefined' && typeof currentQuestions !== 'undefined') {
+            current++;
+            hasMoreQuestions = current < currentQuestions.length;
+        }
+        
+        if (hasMoreQuestions) {
             showQuestion();
         } else {
             handleLevelCompletion();
@@ -291,19 +432,27 @@ function handleLevelCompletion() {
     console.log('Level completed!');
     
     // Hide quit button on completion
-    gameUI.hideQuitButton();
+    if (typeof gameUI !== 'undefined' && gameUI.hideQuitButton) {
+        gameUI.hideQuitButton();
+    }
     
     // Update progress
-    const level = gameState.currentLevel;
-    if (gameState.progress[level]) {
-        gameState.progress[level].completed++;
+    let level = 1;
+    if (typeof gameState !== 'undefined') {
+        level = gameState.currentLevel;
+    } else if (typeof currentLevel !== 'undefined') {
+        level = currentLevel;
+    }
+    
+    if (typeof progress !== 'undefined' && progress[level]) {
+        progress[level].completed++;
         
         // Unlock next level if it exists
-        if (gameState.progress[level + 1]) {
-            gameState.progress[level + 1].unlocked = true;
+        if (progress[level + 1]) {
+            progress[level + 1].unlocked = true;
         }
         
-        gameState.saveProgress();
+        localStorage.setItem('mathSafariProgress', JSON.stringify(progress));
     }
 
     // Show completion message and return to levels
@@ -316,7 +465,12 @@ function handleLevelCompletion() {
     if (feedback) feedback.innerText = 'Great job! Returning to levels...';
 
     setTimeout(() => {
-        gameUI.quitGame(); // This will take them back to level selection
+        if (typeof gameUI !== 'undefined' && gameUI.quitGame) {
+            gameUI.quitGame(); // This will take them back to level selection
+        } else {
+            // Fallback to HTML system
+            returnToLevels();
+        }
     }, 2000);
 }
 
@@ -324,15 +478,22 @@ function handleLevelCompletion() {
 function initGame() {
     console.log('Initializing game...');
     
+    // Synchronize gameState with HTML variables
+    if (typeof gameState !== 'undefined') {
+        gameState.syncProgress();
+    }
+    
     // Hide quit button initially
-    gameUI.hideQuitButton();
+    if (typeof gameUI !== 'undefined' && gameUI.hideQuitButton) {
+        gameUI.hideQuitButton();
+    }
     
     // Set up level selection event listeners
     const levelButtons = document.querySelectorAll('.level-btn');
     levelButtons.forEach(button => {
         button.addEventListener('click', (e) => {
             const level = parseInt(e.target.dataset.level);
-            if (level && gameState.progress[level] && gameState.progress[level].unlocked) {
+            if (level && typeof progress !== 'undefined' && progress[level] && progress[level].unlocked) {
                 startLevel(level);
             }
         });
@@ -342,17 +503,25 @@ function initGame() {
 function startLevel(level) {
     console.log(`Starting level ${level}...`);
     
-    // IMPORTANT: Clear any existing questions first
-    gameState.currentQuestions = null;
-    gameState.currentQuestionIndex = 0;
-    
-    // Load questions for the selected level
-    const success = gameState.loadQuestionsForLevel(level);
-    
-    if (!success) {
-        console.error(`Failed to load level ${level}`);
-        alert(`Sorry, couldn't load level ${level}. Please try again.`);
-        return;
+    // Use gameState if available, otherwise use HTML system
+    if (typeof gameState !== 'undefined' && gameState.loadQuestionsForLevel) {
+        const success = gameState.loadQuestionsForLevel(level);
+        if (!success) {
+            console.error(`Failed to load level ${level}`);
+            alert(`Sorry, couldn't load level ${level}. Please try again.`);
+            return;
+        }
+    } else {
+        // Fallback to HTML system
+        if (typeof currentLevel !== 'undefined') {
+            currentLevel = level;
+        }
+        if (typeof currentQuestions !== 'undefined') {
+            currentQuestions = null;
+        }
+        if (typeof current !== 'undefined') {
+            current = 0;
+        }
     }
     
     // Hide intro overlay and show main content
@@ -370,7 +539,14 @@ function updateLevelButtons() {
     const levelButtons = document.querySelectorAll('.level-btn');
     levelButtons.forEach(button => {
         const level = parseInt(button.dataset.level);
-        const levelData = gameState.progress[level];
+        let levelData = null;
+        
+        // Try to get progress from gameState first, then HTML system
+        if (typeof gameState !== 'undefined' && gameState.progress) {
+            levelData = gameState.progress[level];
+        } else if (typeof progress !== 'undefined') {
+            levelData = progress[level];
+        }
         
         if (levelData) {
             button.disabled = !levelData.unlocked;
@@ -384,11 +560,35 @@ function updateLevelButtons() {
     });
 }
 
+// Enhanced error handling and initialization
+function safeInit() {
+    try {
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(initGame, 100); // Small delay to ensure everything is loaded
+            });
+        } else {
+            setTimeout(initGame, 100);
+        }
+    } catch (error) {
+        console.error('Error during game initialization:', error);
+        // Fallback initialization
+        setTimeout(() => {
+            try {
+                initGame();
+            } catch (fallbackError) {
+                console.error('Fallback initialization failed:', fallbackError);
+            }
+        }, 500);
+    }
+}
+
 // Initialize the game when the DOM is fully loaded
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initGame);
+    document.addEventListener('DOMContentLoaded', safeInit);
 } else {
-    initGame();
+    safeInit();
 }
 
 // Make gameUI and gameState available globally

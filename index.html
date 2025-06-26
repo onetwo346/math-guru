@@ -99,27 +99,70 @@
     }
     .answerBtn {
       font-size: 1.5em;
-      margin: 10px;
-      padding: 15px 25px;
-      border-radius: 12px;
-      border: none;
-      background-color: #FF9800;
-      color: white;
+      padding: 15px 30px;
+      background: rgba(76, 175, 80, 0.2);
+      border: 2px solid #4CAF50;
+      color: #fff;
+      border-radius: 10px;
       cursor: pointer;
-      transition: background-color 0.3s;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(5px);
     }
     .answerBtn:hover {
-      background-color: #e68900;
+      background: rgba(76, 175, 80, 0.8);
+      transform: scale(1.05);
+    }
+    .answerBtn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .answer-btn {
+      font-size: 1.5em;
+      padding: 15px 30px;
+      background: rgba(76, 175, 80, 0.2);
+      border: 2px solid #4CAF50;
+      color: #fff;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(5px);
+      margin: 5px;
+    }
+    .answer-btn:hover {
+      background: rgba(76, 175, 80, 0.8);
+      transform: scale(1.05);
+    }
+    .answer-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
     }
     #feedback {
       font-size: 1.2em;
       margin-top: 15px;
       font-weight: bold;
+      text-align: center;
+      padding: 10px;
+      border-radius: 5px;
+      transition: all 0.3s ease;
+    }
+    #feedback.correct {
+      color: #4CAF50;
+      background: rgba(76, 175, 80, 0.1);
+      border: 1px solid #4CAF50;
+    }
+    #feedback.wrong {
+      color: #f44336;
+      background: rgba(244, 67, 54, 0.1);
+      border: 1px solid #f44336;
     }
     #progress {
       margin-top: 20px;
       font-size: 1.2em;
-      color: #444;
+      color: #fff;
+      text-align: center;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
     }
       .star {
       position: absolute;
@@ -508,7 +551,6 @@
       transform: scale(1.05);
     }
   </style>
-  <script src="gameUI.js"></script>
 </head>
 <body>
   <div id="introOverlay">
@@ -614,7 +656,14 @@
   </div>
   </div>
 
+  <script src="gameUI.js"></script>
   <script>
+    // Global variables for game state
+    let currentLevel = 1;
+    let current = 0;
+    let currentQuestions;
+    const total = 5; // questions per level
+
     const levels = {
       1: {
         name: 'Jungle Addition',
@@ -818,9 +867,29 @@
       }
     };
 
-    let current = 0;
-    let currentQuestions;
-    const total = 5; // questions per level
+    // Game state
+    let progress = JSON.parse(localStorage.getItem('mathSafariProgress')) || {
+      1: { completed: 0, unlocked: true },
+      2: { completed: 0, unlocked: false },
+      3: { completed: 0, unlocked: false },
+      4: { completed: 0, unlocked: false },
+      5: { completed: 0, unlocked: false },
+      6: { completed: 0, unlocked: false },
+      7: { completed: 0, unlocked: false },
+      8: { completed: 0, unlocked: false },
+      9: { completed: 0, unlocked: false },
+      10: { completed: 0, unlocked: false },
+      11: { completed: 0, unlocked: false },
+      12: { completed: 0, unlocked: false },
+      13: { completed: 0, unlocked: false },
+      14: { completed: 0, unlocked: false },
+      15: { completed: 0, unlocked: false },
+      16: { completed: 0, unlocked: false },
+      17: { completed: 0, unlocked: false },
+      18: { completed: 0, unlocked: false },
+      19: { completed: 0, unlocked: false },
+      20: { completed: 0, unlocked: false }
+    };
 
     const questionBox = document.getElementById('questionBox');
     const answersDiv = document.getElementById('answers');
@@ -851,7 +920,10 @@
         current = 0;
         currentQuestions = levels[currentLevel].questions;
         // Update theme
-        mainContent.className = `level-${currentLevel}-theme`;
+        const mainContent = document.getElementById('mainContent');
+        if (mainContent) {
+          mainContent.className = `level-${currentLevel}-theme`;
+        }
         // Ensure progress is properly initialized
         if (!progress[currentLevel]) {
           progress[currentLevel] = { completed: 0, unlocked: true };
@@ -973,31 +1045,6 @@
       }
     }
 
-    // Game state
-    window.currentLevel = 1;
-    let progress = JSON.parse(localStorage.getItem('mathSafariProgress')) || {
-      1: { completed: 0, unlocked: true },
-      2: { completed: 0, unlocked: false },
-      3: { completed: 0, unlocked: false },
-      4: { completed: 0, unlocked: false },
-      5: { completed: 0, unlocked: false },
-      6: { completed: 0, unlocked: false },
-      7: { completed: 0, unlocked: false },
-      8: { completed: 0, unlocked: false },
-      9: { completed: 0, unlocked: false },
-      10: { completed: 0, unlocked: false },
-      11: { completed: 0, unlocked: false },
-      12: { completed: 0, unlocked: false },
-      13: { completed: 0, unlocked: false },
-      14: { completed: 0, unlocked: false },
-      15: { completed: 0, unlocked: false },
-      16: { completed: 0, unlocked: false },
-      17: { completed: 0, unlocked: false },
-      18: { completed: 0, unlocked: false },
-      19: { completed: 0, unlocked: false },
-      20: { completed: 0, unlocked: false }
-    };
-
     // Update level buttons based on progress
     function updateLevelButtons() {
       document.querySelectorAll('.level-btn').forEach(btn => {
@@ -1051,10 +1098,10 @@
           e.preventDefault();
           const level = parseInt(this.dataset.level);
           if (progress[level].unlocked) {
-            window.currentLevel = level;
+            currentLevel = level;
             // Reset and shuffle questions for the new level
-            window.currentQuestions = shuffle([...levels[level].questions]);
-            window.current = 0;
+            currentQuestions = shuffle([...levels[level].questions]);
+            current = 0;
             levelSelect.style.opacity = '0';
             setTimeout(() => {
               introOverlay.style.opacity = '0';
